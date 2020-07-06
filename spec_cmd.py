@@ -24,6 +24,7 @@ AXES = {0:Rhino.Geometry.Vector3d.XAxis,
 2:Rhino.Geometry.Vector3d.ZAxis
 }
 
+
 class attr:
     def __init__(self, name, isEditable, isOn, valType, exportPos):
         self.name = name
@@ -53,6 +54,15 @@ QUANTITY_COLUMN_POS = 5
 MAX_DIM_LEN = 2780
 MAX_DIM_WIDTH = 2050
 
+DIM_PRECISION = rs.GetDocumentUserText ("easy_cut_precision")
+if DIM_PRECISION==None:
+    DIM_PRECISION = 0
+else:
+    try:
+        DIM_PRECISION = int(DIM_PRECISION)
+    except:
+        DIM_PRECISION = 0
+
 class Specification:
     QUANTITY_COLUMN_POS = 5
     def __init__(self, attrs, details):
@@ -74,10 +84,9 @@ class Specification:
         self.table = []
         for details in self.details:
             specRow = list(details[0].getParams())
-            #print specRow
             specRow.insert(self.QUANTITY_COLUMN_POS, len(details))
             self.table.append(specRow)
-        self.table, self.details = (list(t) for t in zip(*sorted(zip(self.table, self.details), key=lambda x: (int(x[0][0]) if int(x[0][0])>0 else 9999, x[0][10], -int(x[0][4])))))
+        self.table, self.details = (list(t) for t in zip(*sorted(zip(self.table, self.details), key=lambda x: (int(x[0][0]) if int(x[0][0])>0 else 9999, x[0][10], -float(x[0][4])))))
     def autoNum(self):
         i = 1
         for tableItem in self.table:
@@ -118,7 +127,23 @@ class SpecDialog(forms.Dialog[bool]):
                 column.DataCell = forms.TextBoxCell(num)
                 self.m_gridview.Columns.Add(column)
                 num+=1
-
+                
+        self.precision_dropdownlist = forms.DropDown()
+        self.precision_dropdownlist.DataStore = ['1', '0.1', '0.01', '0.001', '0.0001', '0.00001']
+        self.precision_dropdownlist.SelectedIndex = DIM_PRECISION
+        self.precision_label = forms.Label(Text = "Dimensions precision " )
+        self.precision_dropdownlist.DropDownClosed += self.changePrecisionVal
+        
+        layout0 = forms.TableLayout()
+        cell = forms.TableCell(self.precision_label,scaleWidth=False)
+        cell.ScaleWidth = False
+        cell2 = forms.TableCell(self.precision_dropdownlist,scaleWidth=False)
+        cell2.ScaleWidth = False
+        row = forms.TableRow(None, cell, cell2)
+        row.ScaleHeight = False
+        layout0.Rows.Add(row)
+        
+        
         self.m_gridview.CellClick += self.gridClick
         self.m_gridview.SelectionChanged += self.gridSelChanged
         self.m_gridview.CellEdited += self.gridEdited
@@ -132,6 +157,7 @@ class SpecDialog(forms.Dialog[bool]):
         cell = forms.TableCell(self.m_gridview)
         row = forms.TableRow(cell)
         row.ScaleHeight = True
+        layout.Rows.Add(layout0)
         layout.Rows.Add(row)
         layout2 = forms.TableLayout()
         cell = forms.TableCell(self.button,True)
@@ -143,10 +169,26 @@ class SpecDialog(forms.Dialog[bool]):
         self.m_linkbutton.Click += self.OnLinkButtonClick
         row = forms.TableRow(self.m_linkbutton)
         layout2.Rows.Add(row)
+        
         layout.Rows.Add(layout2)
+        
         self.Content = layout
+        
+    def changePrecisionVal(self, sender, e):
+        global DIM_PRECISION
+        DIM_PRECISION = sender.SelectedIndex
+        rs.SetDocumentUserText ("easy_cut_precision", str(DIM_PRECISION))
+        specification = self.spec.details
+        for row in specification:
+            for det in row:
+                det.setDims()
+
+        
+        self.rebuild()
+
+    
     def OnCellFormatting(self, sender, e):
-        if self.spec.table[e.Row][2] > MAX_DIM_LEN:
+        if float(self.spec.table[e.Row][2]) > MAX_DIM_LEN:
             e.BackgroundColor = drawing.Colors.Red 
     def setData(self, spec):
         self.spec = spec
@@ -284,9 +326,9 @@ class Detail:
     def setDims(self):
         bb=rs.BoundingBox(self.obj)
         if bb:
-            x=round(bb[1].X-bb[0].X)
-            y=round(bb[3].Y-bb[0].Y)
-            z=round(bb[4].Z-bb[0].Z)
+            x=round(bb[1].X-bb[0].X,DIM_PRECISION)
+            y=round(bb[3].Y-bb[0].Y,DIM_PRECISION)
+            z=round(bb[4].Z-bb[0].Z,DIM_PRECISION)
         else:
             x=0 ; y=0 ; z=0
         texture = self.Texture
@@ -311,9 +353,9 @@ class Detail:
         x = self.dims[0]
         y = self.dims[1]
         z = self.dims[2]
-        self.Length = self.dims[0]
-        self.Width = self.dims[1]
-        self.Thickness = self.dims[2]
+        self.Length = format(self.dims[0],'.' + str(DIM_PRECISION) + 'f')
+        self.Width = format(self.dims[1],'.' + str(DIM_PRECISION) + 'f')
+        self.Thickness = format(self.dims[2],'.' + str(DIM_PRECISION) + 'f')
     def select(self):
         self.selected = 1
         rs.SelectObject(self.id)
