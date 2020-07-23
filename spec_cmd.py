@@ -1,6 +1,7 @@
 # -*- coding: utf8 -*-
 
 import Rhino
+import Rhino.Geometry as g
 import rhinoscriptsyntax as rs
 import codecs
 import sys
@@ -24,6 +25,39 @@ AXES = {0:Rhino.Geometry.Vector3d.XAxis,
 2:Rhino.Geometry.Vector3d.ZAxis
 }
 
+def computeDims(obj):
+    objRef = Rhino.DocObjects.ObjRef(obj)
+    brep = objRef.Geometry()    
+    edges = list(brep.Edges)
+    edges.sort(key=lambda edge: edge.GetLength(), reverse=True)
+    edge = edges[0]
+    adFaces = list(edge.AdjacentFaces())
+    faces = list(brep.Faces)
+    adFaces = [faces[i] for i in adFaces]
+    adFaces.sort(key=lambda face:face.GetSurfaceSize()[1]*face.GetSurfaceSize()[2],reverse=True)
+    face = adFaces[0]
+    faceNor = face.NormalAt(0,0)
+    origin = edge.PointAtStart
+    xPoint = edge.PointAtEnd
+    xVec = Rhino.Geometry.Vector3d(xPoint-origin)
+    xVec.Unitize()
+    yVec = Rhino.Geometry.Vector3d.CrossProduct(faceNor, xVec)
+    yVec.Unitize()
+    plane = Rhino.Geometry.Plane(origin, xVec, yVec)
+    surf = Rhino.Geometry.PlaneSurface(plane, Rhino.Geometry.Interval(0,1),Rhino.Geometry.Interval(0,1))
+    scriptcontext.doc.Objects.AddSurface(surf)
+    verts = list(brep.Vertices)
+    worldPlane = g.Plane.WorldXY
+    tMatrix = g.Transform.ChangeBasis(worldPlane, plane)
+    map(lambda vert:vert.Transform(tMatrix),verts)
+    verts = list(map(lambda vert:vert.Location,verts))
+    verts.sort(key=lambda vert:vert.X)
+    length = verts[len(verts)-1].X - verts[0].X
+    verts.sort(key=lambda vert:vert.Y)
+    width = verts[len(verts)-1].Y - verts[0].Y
+    verts.sort(key=lambda vert:vert.Z)
+    thickness = verts[len(verts)-1].Z - verts[0].Z
+    return [length,width,thickness]
 
 class attr:
     def __init__(self, name, isEditable, isOn, valType, exportPos):
@@ -47,7 +81,7 @@ attr("Layer",False,True,str,10),
 attr("Comment",True,True,str,11)
 )
 
-QUANT_FIELD = attr("Quant",False,True,int,5)
+QUANT_FIELD = attr("number",False,True,int,5)
 
 QUANTITY_COLUMN_POS = 5
 
@@ -159,15 +193,26 @@ class SpecDialog(forms.Dialog[bool]):
         row.ScaleHeight = True
         layout.Rows.Add(layout0)
         layout.Rows.Add(row)
+        
         layout2 = forms.TableLayout()
+        layout2.Spacing = drawing.Size(5, 5)
+        
         cell = forms.TableCell(self.button,True)
         cell2 = forms.TableCell(self.buttonAutoNum,True)
         row = forms.TableRow([cell,cell2])
-        row.ScaleHeight = False
+        
         layout2.Rows.Add(row)
+        layout.Rows.Add(layout2)
+        layout2 = forms.TableLayout()
+        layout2.Spacing = drawing.Size(5, 5)
         self.m_linkbutton = forms.LinkButton(Text = 'Easycut')
         self.m_linkbutton.Click += self.OnLinkButtonClick
-        row = forms.TableRow(self.m_linkbutton)
+        self.m_donatebutton = forms.LinkButton(Text = 'Donate',Style = "right-align")
+        self.m_donatebutton.Click += self.OnDonateButtonClick
+        cell = forms.TableCell(self.m_linkbutton,True)
+        cell2 = forms.TableCell(None,False)
+        cell3 = forms.TableCell(self.m_donatebutton,False)
+        row = forms.TableRow([cell,cell2,cell3])
         layout2.Rows.Add(row)
         
         layout.Rows.Add(layout2)
@@ -307,7 +352,10 @@ class SpecDialog(forms.Dialog[bool]):
         self.rebuild()
 
     def OnLinkButtonClick(self, sender, e):
-        webbrowser.open("https://sites.google.com/view/easycutting/")
+        webbrowser.open("https://easycut3d.online")
+        
+    def OnDonateButtonClick(self, sender, e):
+        webbrowser.open("http://easycut3d.online/donate.html")
 
 class Detail:
     def __init__(self, obj):
@@ -323,16 +371,17 @@ class Detail:
         obj = objRef.Object()
         index = obj.Attributes.LayerIndex
         self.Layer = scriptcontext.doc.Layers[index].Name
-    def setDims(self):
-        bb=rs.BoundingBox(self.obj)
-        if bb:
-            x=round(bb[1].X-bb[0].X,DIM_PRECISION)
-            y=round(bb[3].Y-bb[0].Y,DIM_PRECISION)
-            z=round(bb[4].Z-bb[0].Z,DIM_PRECISION)
-        else:
-            x=0 ; y=0 ; z=0
+    def setDims(self):        
+#        bb=rs.BoundingBox(self.obj)
+#        if bb:
+#            x=round(bb[1].X-bb[0].X,DIM_PRECISION)
+#            y=round(bb[3].Y-bb[0].Y,DIM_PRECISION)
+#            z=round(bb[4].Z-bb[0].Z,DIM_PRECISION)            
+#        else:
+#            x=0 ; y=0 ; z=0
+#        self.dims = [x,y,z]
+        self.dims = computeDims(self.obj)
         texture = self.Texture
-        self.dims = [x,y,z]
         if texture in DIR:
            dir = DIR[texture]
            self.Texture = texture
