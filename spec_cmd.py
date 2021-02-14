@@ -45,7 +45,7 @@ def computeDims(obj):
     yVec.Unitize()
     plane = Rhino.Geometry.Plane(origin, xVec, yVec)
     surf = Rhino.Geometry.PlaneSurface(plane, Rhino.Geometry.Interval(0,1),Rhino.Geometry.Interval(0,1))
-    scriptcontext.doc.Objects.AddSurface(surf)
+    #scriptcontext.doc.Objects.AddSurface(surf)#!!!!delete
     verts = list(brep.Vertices)
     worldPlane = g.Plane.WorldXY
     tMatrix = g.Transform.ChangeBasis(worldPlane, plane)
@@ -57,7 +57,7 @@ def computeDims(obj):
     width = verts[len(verts)-1].Y - verts[0].Y
     verts.sort(key=lambda vert:vert.Z)
     thickness = verts[len(verts)-1].Z - verts[0].Z
-    return [length,width,thickness]
+    return [[length,width,thickness], [xVec,yVec,faceNor]]
 
 class attr:
     def __init__(self, name, isEditable, isOn, valType, exportPos):
@@ -259,7 +259,7 @@ class SpecDialog(forms.Dialog[bool]):
         self.unselectAll()
         if self.edgeshighlightMode>=0:
             for det in dets:
-                det.getEdges(AXES[det.lcs[self.edgeshighlightMode]])
+                det.getEdges(det.lcs[self.edgeshighlightMode])
         else:
             for det in dets:
                 det.select()
@@ -277,7 +277,7 @@ class SpecDialog(forms.Dialog[bool]):
         scriptcontext.doc.Views.Redraw()
         if self.edgeshighlightMode >=0:
             for det in dets:
-                det.getEdges(AXES[det.lcs[self.edgeshighlightMode]])
+                det.getEdges(det.lcs[self.edgeshighlightMode])
         else:
            for det in dets:
                det.select()
@@ -380,28 +380,28 @@ class Detail:
 #        else:
 #            x=0 ; y=0 ; z=0
 #        self.dims = [x,y,z]
-        self.dims = computeDims(self.obj)
-        texture = self.Texture
-        if texture in DIR:
-           dir = DIR[texture]
-           self.Texture = texture
-           self.lcs = dir
-        else:
-            dir = [0,1,2]
-            self.lcs = [i[0] for i in sorted(list(enumerate(self.dims)), key = lambda x:x[1])]
-            self.lcs.reverse()
-            self.dims.sort()
-            self.dims.reverse()
-            alert = "texture missing"
-        x,y,z = self.dims[dir[0]],self.dims[dir[1]],self.dims[dir[2]]
-        if z>y:
-            self.dims = [x,z,y]
-            self.lcs = [self.lcs[0],self.lcs[2],self.lcs[1]]
-        else:
-            self.dims = [x,y,z]
-        x = self.dims[0]
-        y = self.dims[1]
-        z = self.dims[2]
+        self.dims, self.lcs = computeDims(self.obj)
+#        texture = self.Texture
+#        if texture in DIR:
+#           dir = DIR[texture]
+#           self.Texture = texture
+#           self.lcs = dir
+#        else:
+#            dir = [0,1,2]
+#            self.lcs = [i[0] for i in sorted(list(enumerate(self.dims)), key = lambda x:x[1])]
+#            self.lcs.reverse()
+#            self.dims.sort()
+#            self.dims.reverse()
+#            alert = "texture missing"
+#        x,y,z = self.dims[dir[0]],self.dims[dir[1]],self.dims[dir[2]]
+#        if z>y:
+#            self.dims = [x,z,y]
+#            self.lcs = [self.lcs[0],self.lcs[2],self.lcs[1]]
+#        else:
+#            self.dims = [x,y,z]
+#        x = self.dims[0]
+#        y = self.dims[1]
+#        z = self.dims[2]
         self.Length = format(self.dims[0],'.' + str(DIM_PRECISION) + 'f')
         self.Width = format(self.dims[1],'.' + str(DIM_PRECISION) + 'f')
         self.Thickness = format(self.dims[2],'.' + str(DIM_PRECISION) + 'f')
@@ -430,7 +430,7 @@ class Detail:
 
     def getEdges(self, dirVec):
         id = self.id
-        nor = AXES[self.lcs[2]]
+        nor = self.lcs[2]
         objRef = Rhino.DocObjects.ObjRef(id)
         brep = objRef.Geometry()
         obj = objRef.Object()
