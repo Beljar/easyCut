@@ -184,8 +184,8 @@ class SpecDialog(forms.Dialog[bool]):
         self.m_gridview.CellFormatting += self.OnCellFormatting
         self.buttonAutoNum = forms.Button(self.buttonAutoNumClick)
         self.buttonAutoNum.Text = "Auto number"
-        self.button = forms.Button(self.buttonClick)
-        self.button.Text = "Export"
+        self.DefaultButton  = forms.Button(self.buttonClick,Text = 'OK')
+
         layout = forms.TableLayout()
         layout.Spacing = drawing.Size(5, 5)
         cell = forms.TableCell(self.m_gridview)
@@ -197,7 +197,7 @@ class SpecDialog(forms.Dialog[bool]):
         layout2 = forms.TableLayout()
         layout2.Spacing = drawing.Size(5, 5)
         
-        cell = forms.TableCell(self.button,True)
+        cell = forms.TableCell(self.DefaultButton ,True)
         cell2 = forms.TableCell(self.buttonAutoNum,True)
         row = forms.TableRow([cell,cell2])
         
